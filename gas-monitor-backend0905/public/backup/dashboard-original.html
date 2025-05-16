@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Gas Monitoring Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #1e3a8a;
+            --secondary-color: #3b82f6;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #06b6d4;
+            --dark-color: #111827;
+            --light-color: #f3f4f6;
+            --body-bg: #f9fafb;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--body-bg);
+            color: var(--dark-color);
+            padding: 0;
+            margin: 0;
+            min-height: 100vh;
+            transition: background-color 0.3s ease;
+        }
+
+        /* Dashboard Layout */
+        .dashboard-container {
+            padding: 20px;
+        }
+
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            padding: 1.5rem;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            border-radius: 0 0 20px 20px;
+        }
+
+        .dashboard-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0) 70%);
+            animation: pulse-header 10s infinite;
+        }
+
+        @keyframes pulse-header {
+            0% { transform: translate(0, 0); }
+            50% { transform: translate(10%, 10%); }
+            100% { transform: translate(0, 0); }
+        }
+
+        /* Cards */
+        .card {
+            margin-bottom: 1.5rem;
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            background-color: var(--card-bg);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        .card-header {
+            font-weight: 600;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            padding: 1rem 1.5rem;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Device Cards */
+        .device-card .card-header {
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 1rem 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .device-card .card-header::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100px;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 100%);
+            animation: shine 3s infinite;
+        }
+
+        @keyframes shine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+        }
+
+        .device-card.status-critical .card-header {
+            background: linear-gradient(to right, var(--danger-color), #ff7272);
+            animation: pulse-critical 2s infinite;
+        }
+
+        .device-card.status-warning .card-header {
+            background: linear-gradient(to right, var(--warning-color), #ffd166);
+        }
+
+        .device-card.status-normal .card-header {
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+        }
+
+        @keyframes pulse-critical {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Gauges and Meters */
+        .gauge-container {
+            width: 160px;
+            height: 160px;
+            margin: 0 auto 1rem;
+            position: relative;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+
+        .gauge {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .gauge-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--dark-color);
+        }
+
+        .gauge-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--dark-color);
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        .gauge-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 1rem;
+            color: var(--dark-color);
+        }
+
+        /* Value change animation */
+        .value-change {
+            animation: highlight 1.5s ease-out;
+        }
+
+        @keyframes highlight {
+            0% { background-color: rgba(16, 185, 129, 0.3); border-radius: 4px; }
+            100% { background-color: transparent; }
+        }
+
+        /* Temperature gauge specific */
+        .temp-gauge-container {
+            position: relative;
+        }
+
+        .temp-gradient {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: conic-gradient(
+                var(--primary-color) 0%,
+                var(--info-color) 30%,
+                var(--success-color) 50%,
+                var(--warning-color) 70%,
+                var(--danger-color) 100%
+            );
+            border-radius: 50%;
+            opacity: 0.2;
+        }
+
+        /* Alarm Section */
+        .alarm-card {
+            border-left: 5px solid var(--danger-color);
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+            animation: pulsate 2s infinite;
+        }
+
+        .alarm-card.critical {
+            background-color: rgba(239, 68, 68, 0.05);
+            border-left-color: var(--danger-color);
+        }
+
+        .alarm-card.warning {
+            background-color: rgba(245, 158, 11, 0.05);
+            border-left-color: var(--warning-color);
+        }
+
+        .alarm-card.info {
+            background-color: rgba(6, 182, 212, 0.05);
+            border-left-color: var(--info-color);
+        }
+
+        @keyframes pulsate {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .alarm-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: var(--danger-color);
+            color: white;
+            margin-right: 1rem;
+        }
+
+        .alarm-icon.warning {
+            background-color: var(--warning-color);
+        }
+
+        .alarm-icon.info {
+            background-color: var(--info-color);
+        }
+
+        /* Notification system */
+        #notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 350px;
+        }
+
+        .notification {
+            margin-bottom: 10px;
+            animation: slideIn 0.5s ease-out;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+            overflow: hidden;
+            border: none;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Animated loading state */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            border-radius: 16px;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(0, 0, 0, 0.1);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Connection status indicator */
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-left: 1rem;
+        }
+
+        .connection-status.connected {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: var(--success-color);
+        }
+
+        .connection-status.disconnected {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: var(--danger-color);
+        }
+
+        .connection-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .connection-indicator.connected {
+            background-color: var(--success-color);
+            box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
+            animation: pulse-connection 2s infinite;
+        }
+
+        .connection-indicator.disconnected {
+            background-color: var(--danger-color);
+        }
+
+        @keyframes pulse-connection {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Dark mode toggle */
+        .theme-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+            margin-left: 1rem;
+        }
+
+        .theme-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(30px);
+        }
+
+        /* Plant & Device selectors */
+        .select-container {
+            position: relative;
+        }
+
+        .custom-select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--dark-color);
+            background-color: var(--card-bg);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            appearance: none;
+            transition: all 0.3s ease;
+        }
+
+        .custom-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+
+        .select-arrow {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: var(--primary-color);
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .gauge-container {
+                width: 120px;
+                height: 120px;
+            }
+            
+            .gauge-value {
+                font-size: 18px;
+            }
+            
+            .gauge-title {
+                font-size: 1rem;
+            }
+        }
+        
+        /* Data trends section */
+        .trends-container {
+            height: 200px;
+            margin-top: 1rem;
+        }
+        
+        /* Live status badge */
+        .live-status {
+            display: inline-flex;
+            align-items: center;
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 1rem;
+        }
+        
+        .live-status.active {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+        
+        .live-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--danger-color);
+            margin-right: 6px;
+        }
+        
+        .live-status.active .live-pulse {
+            background-color: var(--success-color);
+            animation: live-pulse 1.5s infinite;
+        }
+        
+        @keyframes live-pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="text-center">Gas Monitor Real-time Dashboard</h1>
+                <p class="text-center text-muted">Live telemetry data from IoT devices</p>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Plant Selection
+                    </div>
+                    <div class="card-body">
+                        <select id="plant-selector" class="form-select">
+                            <option value="">Select a plant</option>
+                            <option value="1">Plant C</option>
+                            <option value="2">Plant D</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Device Selection
+                    </div>
+                    <div class="card-body">
+                        <select id="device-selector" class="form-select">
+                            <option value="">Select a device</option>
+                            <option value="esp32_02">ESP32-02 (Plant C)</option>
+                            <option value="esp32_04">ESP32-04 (Plant D)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="row" id="devices-container">
+                    <!-- Device cards will be added here dynamically -->
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        Recent Alarms
+                    </div>
+                    <div class="card-body">
+                        <div id="alarms-container">
+                            <!-- Alarm cards will be added here dynamically -->
+                            <p id="no-alarms-message" class="text-center text-muted">No recent alarms</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification-container">
+        <!-- Notifications will be added here dynamically -->
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Gauge.js for better gauge visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/gauge-chart@0.5.3/dist/bundle.js"></script>
+    <!-- Moment.js for better date handling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script>
+        // Global application state
+        const appState = {
+            darkMode: localStorage.getItem('darkMode') === 'true',
+            connectionStatus: false,
+            devices: {},
+            alarms: [],
+            charts: {},
+            gauges: {},
+            lastUpdate: null,
+            selectedPlant: null,
+            selectedDevice: null,
+            historyData: {},
+            thresholds: {
+                temperature: { warning: 30, critical: 40 },
+                humidity: { warning: 70, critical: 85 },
+                oilLevel: { warning: 25, critical: 15 }
+            }
+        };
+
+        // Initialize Socket.IO connection
+        const socket = io(window.location.origin);
+
+        // Socket connection event handlers
+        socket.on('connect', () => {
+            console.log('✅ Connected to WebSocket server');
+            appState.connectionStatus = true;
+            updateConnectionStatus(true);
+            showNotification('Connected to monitoring server', 'success');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('❌ Disconnected from WebSocket server');
+            appState.connectionStatus = false;
+            updateConnectionStatus(false);
+            showNotification('Disconnected from server. Attempting to reconnect...', 'danger');
+        });
+
+        // Data event listeners
+        socket.on('telemetry', (data) => {
+            console.log('📊 Received telemetry data:', data);
+            processDeviceData(data);
+        });
+
+        socket.on('alarm', (data) => {
+            console.log('🚨 Received alarm data:', data);
+            processAlarmData(data);
+        });
+
+        socket.on('alarm_notification', (data) => {
+            console.log('🔔 Received alarm notification:', data);
+            showNotification(`${data.deviceName}: ${data.description}`, 'danger', 10000);
+        });
+
+        // UI Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeUI();
+            loadDarkModePreference();
+            setupEventListeners();
+        });
+
+        // Initialize UI components
+        function initializeUI() {
+            // Update connection status initially
+            updateConnectionStatus(appState.connectionStatus);
+            
+            // Set device and alarm counts
+            updateCounters();
+            
+            // Set up refresh buttons
+            document.getElementById('refresh-alarms').addEventListener('click', () => {
+                showNotification('Refreshing alarm data...', 'info');
+                // In a real implementation, we might query the server for the latest alarms
+                // For demo, just show a notification
+            });
+        }
+
+        // Set up event listeners for UI controls
+        function setupEventListeners() {
+            // Plant selector change
+            document.getElementById('plant-selector').addEventListener('change', function() {
+                const plantId = this.value;
+                if (plantId) {
+                    // Clear device selector
+                    document.getElementById('device-selector').value = '';
+                    appState.selectedPlant = plantId;
+                    appState.selectedDevice = null;
+                    
+                    // Subscribe to plant
+                    socket.emit('subscribePlant', plantId);
+                    showNotification(`Monitoring Plant ${plantId === '1' ? 'C' : 'D'}`, 'info');
+                    
+                    // Clear device container and show loading state
+                    document.getElementById('no-devices-message').style.display = 'none';
+                }
+            });
+
+            // Device selector change
+            document.getElementById('device-selector').addEventListener('change', function() {
+                const deviceId = this.value;
+                if (deviceId) {
+                    // Clear plant selector
+                    document.getElementById('plant-selector').value = '';
+                    appState.selectedDevice = deviceId;
+                    appState.selectedPlant = null;
+                    
+                    // Subscribe to device
+                    socket.emit('subscribe', deviceId);
+                    showNotification(`Monitoring device ${deviceId}`, 'info');
+                    
+                    // Clear device container and show loading state
+                    document.getElementById('no-devices-message').style.display = 'none';
+                }
+            });
+
+            // Dark mode toggle
+            document.getElementById('theme-toggle').addEventListener('change', function() {
+                toggleDarkMode(this.checked);
+            });
+
+            // Command center - enable/disable send button based on selections
+            document.getElementById('command-device-selector').addEventListener('change', updateCommandButtonState);
+            document.getElementById('command-type-selector').addEventListener('change', updateCommandButtonState);
+            
+            // Send command button
+            document.getElementById('send-command-btn').addEventListener('click', sendDeviceCommand);
+        }
+
+        // Process incoming telemetry data
+        function processDeviceData(data) {
+            const deviceId = data.deviceId || data.device;
+            const deviceName = data.deviceName || deviceId;
+            const plantName = data.plantName || (deviceId.includes('esp32_04') ? 'Plant D' : 'Plant C');
+            const plantId = plantName === 'Plant D' ? '2' : '1';
+            
+            // Create or update device in app state
+            if (!appState.devices[deviceId]) {
+                appState.devices[deviceId] = {
+                    id: deviceId,
+                    name: deviceName,
+                    plantName: plantName,
+                    plantId: plantId,
+                    temperature: 0,
+                    humidity: 0,
+                    oilLevel: 0,
+                    status: 'normal',
+                    timestamp: new Date(),
+                    history: {
+                        temperature: [],
+                        humidity: [],
+                        oilLevel: []
+                    }
+                };
+            }
+            
+            // Keep history for charts (limited to 20 points)
+            const device = appState.devices[deviceId];
+            const timestamp = new Date();
+            
+            // Add new data points to history
+            device.history.temperature.push({x: timestamp, y: data.temperature || data.Temperature || 0});
+            device.history.humidity.push({x: timestamp, y: data.humidity || data.Humidity || 0});
+            device.history.oilLevel.push({x: timestamp, y: data.oilLevel || data.OilLevel || 0});
+            
+            // Limit history to last 20 points
+            if (device.history.temperature.length > 20) {
+                device.history.temperature.shift();
+                device.history.humidity.shift();
+                device.history.oilLevel.shift();
+            }
+            
+            // Update device metrics
+            const oldTemperature = device.temperature;
+            const oldHumidity = device.humidity;
+            const oldOilLevel = device.oilLevel;
+            
+            device.temperature = data.temperature || data.Temperature || 0;
+            device.humidity = data.humidity || data.Humidity || 0;
+            device.oilLevel = data.oilLevel || data.OilLevel || 0;
+            device.timestamp = timestamp;
+            
+            // Update device status based on thresholds
+            device.status = calculateDeviceStatus(device);
+            
+            // Update UI
+            updateDeviceCard(deviceId, {
+                temperature: oldTemperature,
+                humidity: oldHumidity,
+                oilLevel: oldOilLevel
+            });
+            
+            // Update device count in the UI
+            updateCounters();
+        }
+
+        // Process incoming alarm data
+        function processAlarmData(data) {
+            const alarmId = data.id || data._id;
+            
+            // Check if alarm already exists
+            const existingAlarmIndex = appState.alarms.findIndex(a => a.id === alarmId);
+            
+            if (existingAlarmIndex === -1) {
+                // Add new alarm
+                const alarm = {
+                    id: alarmId,
+                    deviceId: data.deviceId || data.DeviceId,
+                    deviceName: data.deviceName || data.DeviceName,
+                    code: data.alarmCode || data.AlarmCode,
+                    description: data.alarmDescription || data.AlarmDescription,
+                    value: data.alarmValue || data.Value,
+                    severity: determineSeverity(data),
+                    timestamp: new Date(data.createdTimestamp || data.Timestamp || new Date()),
+                    isActive: data.isActive !== undefined ? data.isActive : true
+                };
+                
+                appState.alarms.push(alarm);
+                
+                // Sort alarms by timestamp (newest first)
+                appState.alarms.sort((a, b) => b.timestamp - a.timestamp);
+                
+                // Update UI
+                renderAlarmCard(alarm);
+                
+                // Play alert sound for critical alarms
+                if (alarm.severity === 'critical') {
+                    playAlertSound();
+                }
+            } else {
+                // Update existing alarm
+                const alarm = appState.alarms[existingAlarmIndex];
+                alarm.isActive = data.isActive !== undefined ? data.isActive : true;
+                
+                // Update UI
+                updateAlarmCard(alarm);
+            }
+            
+            // Update alarm count in the UI
+            updateCounters();
+            
+            // Hide 'no alarms' message if we have alarms
+            document.getElementById('no-alarms-message').style.display = 
+                appState.alarms.filter(a => a.isActive).length > 0 ? 'none' : 'block';
+        }
+
+        // Create device card
+        function createDeviceCard(deviceId) {
+            const devicesContainer = document.getElementById('device-container');
+            
+            const deviceCard = document.createElement('div');
+            deviceCard.className = 'col-md-6 mb-4';
+            deviceCard.innerHTML = `
+                <div id="card-${deviceId}" class="card device-card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>${deviceData[deviceId].deviceName}</span>
+                        <small id="timestamp-${deviceId}" class="text-light">
+                            ${new Date(deviceData[deviceId].timestamp).toLocaleTimeString()}
+                        </small>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="gauge-container">
+                                    <canvas id="temp-gauge-${deviceId}" class="gauge"></canvas>
+                                    <div class="gauge-value" id="temp-value-${deviceId}">
+                                        ${deviceData[deviceId].temperature}°C
+                                    </div>
+                                </div>
+                                <h5 class="text-center mt-2">Temperature</h5>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="gauge-container">
+                                    <canvas id="humidity-gauge-${deviceId}" class="gauge"></canvas>
+                                    <div class="gauge-value" id="humidity-value-${deviceId}">
+                                        ${deviceData[deviceId].humidity}%
+                                    </div>
+                                </div>
+                                <h5 class="text-center mt-2">Humidity</h5>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="gauge-container">
+                                    <canvas id="oil-gauge-${deviceId}" class="gauge"></canvas>
+                                    <div class="gauge-value" id="oil-value-${deviceId}">
+                                        ${deviceData[deviceId].oilLevel}%
+                                    </div>
+                                </div>
+                                <h5 class="text-center mt-2">Oil Level</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            devicesContainer.appendChild(deviceCard);
+            
+            // Create gauges
+            createGauges(deviceId);
+        }
+
+        // Create gauges for device
+        function createGauges(deviceId) {
+            // Temperature gauge
+            const tempCtx = document.getElementById(`temp-gauge-${deviceId}`).getContext('2d');
+            const tempGauge = createGauge(tempCtx, 'Temperature', '#dc3545', 0, 100);
+            appState.gauges[deviceId] = appState.gauges[deviceId] || {};
+            appState.gauges[deviceId].temperature = tempGauge;
+
+            // Humidity gauge
+            const humCtx = document.getElementById(`humidity-gauge-${deviceId}`).getContext('2d');
+            const humGauge = createGauge(humCtx, 'Humidity', '#4dabf7', 0, 100);
+            appState.gauges[deviceId].humidity = humGauge;
+
+            // Oil Level gauge
+            const oilCtx = document.getElementById(`oil-gauge-${deviceId}`).getContext('2d');
+            const oilGauge = createGauge(oilCtx, 'Oil Level', '#82c91e', 0, 100);
+            appState.gauges[deviceId].oilLevel = oilGauge;
+        }
+
+        // Create gauge visualization
+        function createGauge(canvas, label, color, min, max) {
+            const config = {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [0, 100],
+                        backgroundColor: [color, '#e9ecef'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    cutout: '75%',
+                    circumference: 180,
+                    rotation: -90,
+                    maintainAspectRatio: true,
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    },
+                    animation: {
+                        duration: 800,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            };
+            
+            return new Chart(canvas, config);
+        }
+
+        // Initialize device trend chart
+        function initializeDeviceChart(canvas, deviceId) {
+            if (!appState.devices[deviceId]) return;
+            
+            const device = appState.devices[deviceId];
+            const ctx = canvas.getContext('2d');
+            
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Temperature',
+                            data: device.history.temperature,
+                            borderColor: '#ff6b6b',
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: false,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Humidity',
+                            data: device.history.humidity,
+                            borderColor: '#4dabf7',
+                            backgroundColor: 'rgba(77, 171, 247, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: false,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Oil Level',
+                            data: device.history.oilLevel,
+                            borderColor: '#82c91e',
+                            backgroundColor: 'rgba(130, 201, 30, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: false,
+                            yAxisID: 'y'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 6
+                            }
+                        },
+                        title: {
+                            display: false
+                        }
+    const device = appState.devices[deviceId];
+    const ctx = canvas.getContext('2d');
+    
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: 'Temperature',
+                    data: device.history.temperature,
+                    borderColor: '#ff6b6b',
+                    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Humidity',
+                    data: device.history.humidity,
+                    borderColor: '#4dabf7',
+                    backgroundColor: 'rgba(77, 171, 247, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Oil Level',
+                    data: device.history.oilLevel,
+                    borderColor: '#82c91e',
+                    backgroundColor: 'rgba(130, 201, 30, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 6
+                    }
+                },
+                title: {
+                    display: false
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'minute',
+                        displayFormats: {
+                            minute: 'HH:mm:ss'
+                        }
+                    },
+                    ticks: {
+                        maxRotation: 0
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    suggestedMax: 100
+                }
+            },
+            animation: {
+                duration: 800
+            }
+        }
+    });
+    
+    // Store chart in app state
+    appState.charts[deviceId] = chart;
+}
+
+// Update device card with new data
+function updateDeviceCard(deviceId, oldData) {
+    if (!appState.devices[deviceId]) return;
+    
+    const device = appState.devices[deviceId];
+    const deviceCard = document.getElementById(`device-${deviceId}`);
+    
+    if (!deviceCard) {
+        createDeviceCard(deviceId);
+        return;
+    }
+    
+    // Update device status class
+    const cardElement = deviceCard.querySelector('.device-card');
+    cardElement.className = cardElement.className.replace(/status-\w+/, `status-${device.status}`);
+    
+    // Update status badge
+    const statusBadge = deviceCard.querySelector('.device-status-badge');
+    updateStatusBadge(statusBadge, device.status);
+    
+    // Update gauge values with animation
+    const tempValue = deviceCard.querySelector('.temperature-value');
+    const humValue = deviceCard.querySelector('.humidity-value');
+    const oilValue = deviceCard.querySelector('.oil-level-value');
+    const timestamp = deviceCard.querySelector('.timestamp');
+    
+    // Update temperature with highlight effect if changed
+    if (!oldData || device.temperature !== oldData.temperature) {
+        updateValueWithHighlight(tempValue, `${device.temperature.toFixed(1)}°C`);
+        
+        // Update gauge
+        if (appState.gauges[deviceId] && appState.gauges[deviceId].temperature) {
+            const gauge = appState.gauges[deviceId].temperature;
+            // Scale to 0-100% for visualization
+            const scaledValue = Math.min(Math.max(device.temperature * 2, 0), 100);
+            gauge.data.datasets[0].data = [scaledValue, 100 - scaledValue];
+            gauge.update();
+                value: data.alarmValue || data.AlarmValue,
+                timestamp: new Date(data.createdTimestamp || data.CreatedTimestamp || new Date())
+            };
+
+            // Add to alarms array (at the beginning)
+            alarms.unshift(alarm);
+
+            // Limit to 10 alarms
+            if (alarms.length > 10) {
+                alarms.pop();
+            }
+
+            // Update alarms container
+            updateAlarmsContainer();
+        }
+
+        // Update alarms container
+        function updateAlarmsContainer() {
+            const alarmsContainer = document.getElementById('alarms-container');
+            
+            // Clear container
+            alarmsContainer.innerHTML = '';
+            
+            // Add alarms
+            if (alarms.length === 0) {
+                alarmsContainer.innerHTML = '<p id="no-alarms-message" class="text-center text-muted">No recent alarms</p>';
+            } else {
+                alarms.forEach(alarm => {
+                    const alarmCard = document.createElement('div');
+                    alarmCard.className = 'card alarm-card mb-2';
+                    alarmCard.innerHTML = `
+                        <div class="card-body p-2">
+                            <h6 class="card-title mb-1">${alarm.description}</h6>
+                            <p class="card-text mb-1">
+                                <small class="text-muted">
+                                    ${alarm.deviceName} - ${alarm.alarmCode}
+                                    ${alarm.value ? `(${alarm.value})` : ''}
+                                </small>
+                            </p>
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    ${alarm.timestamp.toLocaleTimeString()}
+                                </small>
+                            </p>
+                        </div>
+                    `;
+                    alarmsContainer.appendChild(alarmCard);
+                });
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type) {
+            const notificationContainer = document.getElementById('notification-container');
+            
+            const notification = document.createElement('div');
+            notification.className = `notification alert alert-${type}`;
+            notification.innerHTML = message;
+            
+            notificationContainer.appendChild(notification);
+            
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    notificationContainer.removeChild(notification);
+                }, 500);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

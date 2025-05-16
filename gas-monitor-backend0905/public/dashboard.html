@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gas Monitor Real-time Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .card-header {
+            background-color: #0d6efd;
+            color: white;
+            font-weight: bold;
+        }
+        .device-card {
+            transition: all 0.3s ease;
+        }
+        .device-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+        }
+        .gauge-container {
+            width: 150px;
+            height: 150px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .gauge {
+            width: 100%;
+            height: 100%;
+        }
+        .gauge-value {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .alarm-card {
+            border-left: 5px solid #dc3545;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+            }
+        }
+        #notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 350px;
+        }
+        .notification {
+            margin-bottom: 10px;
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .value-change {
+            animation: highlight 2s ease-out;
+        }
+        @keyframes highlight {
+            0% {
+                background-color: rgba(255, 255, 0, 0.5);
+            }
+            100% {
+                background-color: transparent;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="text-center">Gas Monitor Real-time Dashboard</h1>
+                <p class="text-center text-muted">Live telemetry data from IoT devices</p>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Plant Selection
+                    </div>
+                    <div class="card-body">
+                        <select id="plant-selector" class="form-select">
+                            <option value="">Select a plant</option>
+                            <option value="1">Plant C</option>
+                            <option value="2">Plant D</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Device Selection
+                    </div>
+                    <div class="card-body">
+                        <select id="device-selector" class="form-select">
+                            <option value="">Select a device</option>
+                            <option value="esp32_02">ESP32-02 (Plant C)</option>
+                            <option value="esp32_04">ESP32-04 (Plant D)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="row" id="devices-container">
+                    <!-- Device cards will be added here dynamically -->
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        Recent Alarms
+                    </div>
+                    <div class="card-body">
+                        <div id="alarms-container">
+                            <!-- Alarm cards will be added here dynamically -->
+                            <p id="no-alarms-message" class="text-center text-muted">No recent alarms</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification-container">
+        <!-- Notifications will be added here dynamically -->
+    </div>
+
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- Chart.js for gauges -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Main JavaScript -->
+    <script>
+        // Store device data
+        const deviceData = {};
+        // Store alarms
+        const alarms = [];
+        // Store charts
+        const charts = {};
+
+        // Connect to WebSocket server
+        const socket = io(window.location.origin);
+
+        // Socket connection event
+        socket.on('connect', () => {
+            console.log('Connected to WebSocket server');
+            showNotification('Connected to server', 'success');
+        });
+
+        // Socket disconnection event
+        socket.on('disconnect', () => {
+            console.log('Disconnected from WebSocket server');
+            showNotification('Disconnected from server', 'danger');
+        });
+
+        // Listen for telemetry data
+        socket.on('telemetry', (data) => {
+            console.log('Received telemetry data:', data);
+            updateDeviceData(data);
+        });
+
+        // Listen for alarm data
+        socket.on('alarm', (data) => {
+            console.log('Received alarm data:', data);
+            addAlarm(data);
+        });
+
+        // Listen for alarm notifications
+        socket.on('alarm_notification', (data) => {
+            console.log('Received alarm notification:', data);
+            showNotification(`Alarm: ${data.description} (${data.deviceName})`, 'danger');
+        });
+
+        // Plant selector change event
+        document.getElementById('plant-selector').addEventListener('change', function() {
+            const plantId = this.value;
+            if (plantId) {
+                // Clear device selector
+                document.getElementById('device-selector').value = '';
+                // Subscribe to plant
+                socket.emit('subscribePlant', plantId);
+                showNotification(`Subscribed to Plant ${plantId === '1' ? 'C' : 'D'}`, 'info');
+            }
+        });
+
+        // Device selector change event
+        document.getElementById('device-selector').addEventListener('change', function() {
+            const deviceId = this.value;
+            if (deviceId) {
+                // Clear plant selector
+                document.getElementById('plant-selector').value = '';
+                // Subscribe to device
+                socket.emit('subscribe', deviceId);
+                showNotification(`Subscribed to device ${deviceId}`, 'info');
+            }
+        });
+
+        // Update device data
+        function updateDeviceData(data) {
+            const deviceId = data.deviceId || data.device;
+            
+            // Create device card if it doesn't exist
+            if (!deviceData[deviceId]) {
+                deviceData[deviceId] = {
+                    deviceName: data.deviceName || deviceId,
+                    temperature: 0,
+                    humidity: 0,
+                    oilLevel: 0,
+                    timestamp: new Date()
+                };
+                createDeviceCard(deviceId);
+            }
+
+            // Update device data
+            const oldData = {...deviceData[deviceId]};
+            deviceData[deviceId] = {
+                ...deviceData[deviceId],
+                temperature: data.temperature || data.Temperature || 0,
+                humidity: data.humidity || data.Humidity || 0,
+                oilLevel: data.oilLevel || data.OilLevel || 0,
+                timestamp: new Date(data.timestamp || data.Timestamp || new Date())
+            };
+
+            // Update device card
+            updateDeviceCard(deviceId, oldData);
+        }
+
+        // Create device card
+        function createDeviceCard(deviceId) {
+            const devicesContainer = document.getElementById('devices-container');
+            
+            const deviceCard = document.createElement('div');
+            deviceCard.className = 'col-md-6 mb-4';
+            deviceCard.innerHTML = `
+                <div id="card-${deviceId}" class="card device-card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>${deviceData[deviceId].deviceName}</span>
+                        <small id="timestamp-${deviceId}" class="text-light">
+                            ${new Date(deviceData[deviceId].timestamp).toLocaleTimeString()}
+                        </small>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="gauge-container">
+                                    <canvas id="temp-gauge-${deviceId}" class="gauge"></canvas>
+                                    <div class="gauge-value" id="temp-value-${deviceId}">
+                                        ${deviceData[deviceId].temperature}°C
+                                    </div>
+                                </div>
+                                <h5 class="text-center mt-2">Temperature</h5>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="gauge-container">
+                                    <canvas id="humidity-gauge-${deviceId}" class="gauge"></canvas>
+                                    <div class="gauge-value" id="humidity-value-${deviceId}">
+                                        ${deviceData[deviceId].humidity}%
+                                    </div>
+                                </div>
+                                <h5 class="text-center mt-2">Humidity</h5>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="gauge-container">
+                                    <canvas id="oil-gauge-${deviceId}" class="gauge"></canvas>
+                                    <div class="gauge-value" id="oil-value-${deviceId}">
+                                        ${deviceData[deviceId].oilLevel}%
+                                    </div>
+                                </div>
+                                <h5 class="text-center mt-2">Oil Level</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            devicesContainer.appendChild(deviceCard);
+            
+            // Create gauges
+            createGauges(deviceId);
+        }
+
+        // Create gauges for device
+        function createGauges(deviceId) {
+            // Temperature gauge
+            const tempCtx = document.getElementById(`temp-gauge-${deviceId}`).getContext('2d');
+            charts[`temp-${deviceId}`] = new Chart(tempCtx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [deviceData[deviceId].temperature, 100 - deviceData[deviceId].temperature],
+                        backgroundColor: ['#dc3545', '#e9ecef'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    cutout: '70%',
+                    rotation: -90,
+                    circumference: 180,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: false
+                        }
+                    },
+                    animation: {
+                        duration: 500
+                    }
+                }
+            });
+
+            // Humidity gauge
+            const humidityCtx = document.getElementById(`humidity-gauge-${deviceId}`).getContext('2d');
+            charts[`humidity-${deviceId}`] = new Chart(humidityCtx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [deviceData[deviceId].humidity, 100 - deviceData[deviceId].humidity],
+                        backgroundColor: ['#0d6efd', '#e9ecef'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    cutout: '70%',
+                    rotation: -90,
+                    circumference: 180,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: false
+                        }
+                    },
+                    animation: {
+                        duration: 500
+                    }
+                }
+            });
+
+            // Oil level gauge
+            const oilCtx = document.getElementById(`oil-gauge-${deviceId}`).getContext('2d');
+            charts[`oil-${deviceId}`] = new Chart(oilCtx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [deviceData[deviceId].oilLevel, 100 - deviceData[deviceId].oilLevel],
+                        backgroundColor: ['#198754', '#e9ecef'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    cutout: '70%',
+                    rotation: -90,
+                    circumference: 180,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: false
+                        }
+                    },
+                    animation: {
+                        duration: 500
+                    }
+                }
+            });
+        }
+
+        // Update device card
+        function updateDeviceCard(deviceId, oldData) {
+            // Update timestamp
+            const timestampElement = document.getElementById(`timestamp-${deviceId}`);
+            if (timestampElement) {
+                timestampElement.textContent = new Date(deviceData[deviceId].timestamp).toLocaleTimeString();
+            }
+
+            // Update temperature
+            const tempValueElement = document.getElementById(`temp-value-${deviceId}`);
+            if (tempValueElement) {
+                tempValueElement.textContent = `${deviceData[deviceId].temperature.toFixed(1)}°C`;
+                if (oldData.temperature !== deviceData[deviceId].temperature) {
+                    tempValueElement.classList.add('value-change');
+                    setTimeout(() => {
+                        tempValueElement.classList.remove('value-change');
+                    }, 2000);
+                }
+            }
+
+            // Update humidity
+            const humidityValueElement = document.getElementById(`humidity-value-${deviceId}`);
+            if (humidityValueElement) {
+                humidityValueElement.textContent = `${deviceData[deviceId].humidity.toFixed(1)}%`;
+                if (oldData.humidity !== deviceData[deviceId].humidity) {
+                    humidityValueElement.classList.add('value-change');
+                    setTimeout(() => {
+                        humidityValueElement.classList.remove('value-change');
+                    }, 2000);
+                }
+            }
+
+            // Update oil level
+            const oilValueElement = document.getElementById(`oil-value-${deviceId}`);
+            if (oilValueElement) {
+                oilValueElement.textContent = `${deviceData[deviceId].oilLevel.toFixed(1)}%`;
+                if (oldData.oilLevel !== deviceData[deviceId].oilLevel) {
+                    oilValueElement.classList.add('value-change');
+                    setTimeout(() => {
+                        oilValueElement.classList.remove('value-change');
+                    }, 2000);
+                }
+            }
+
+            // Update gauges
+            updateGauges(deviceId);
+        }
+
+        // Update gauges
+        function updateGauges(deviceId) {
+            // Update temperature gauge
+            if (charts[`temp-${deviceId}`]) {
+                charts[`temp-${deviceId}`].data.datasets[0].data = [
+                    deviceData[deviceId].temperature,
+                    100 - deviceData[deviceId].temperature
+                ];
+                charts[`temp-${deviceId}`].update();
+            }
+
+            // Update humidity gauge
+            if (charts[`humidity-${deviceId}`]) {
+                charts[`humidity-${deviceId}`].data.datasets[0].data = [
+                    deviceData[deviceId].humidity,
+                    100 - deviceData[deviceId].humidity
+                ];
+                charts[`humidity-${deviceId}`].update();
+            }
+
+            // Update oil level gauge
+            if (charts[`oil-${deviceId}`]) {
+                charts[`oil-${deviceId}`].data.datasets[0].data = [
+                    deviceData[deviceId].oilLevel,
+                    100 - deviceData[deviceId].oilLevel
+                ];
+                charts[`oil-${deviceId}`].update();
+            }
+        }
+
+        // Add alarm
+        function addAlarm(data) {
+            // Hide no alarms message
+            document.getElementById('no-alarms-message').style.display = 'none';
+
+            // Create alarm object
+            const alarm = {
+                id: data.id || data._id || Date.now().toString(),
+                deviceId: data.deviceId || data.DeviceId,
+                deviceName: data.deviceName || data.DeviceName,
+                alarmCode: data.alarmCode || data.AlarmCode,
+                description: data.alarmDescription || data.AlarmDescription,
+                value: data.alarmValue || data.AlarmValue,
+                timestamp: new Date(data.createdTimestamp || data.CreatedTimestamp || new Date())
+            };
+
+            // Add to alarms array (at the beginning)
+            alarms.unshift(alarm);
+
+            // Limit to 10 alarms
+            if (alarms.length > 10) {
+                alarms.pop();
+            }
+
+            // Update alarms container
+            updateAlarmsContainer();
+        }
+
+        // Update alarms container
+        function updateAlarmsContainer() {
+            const alarmsContainer = document.getElementById('alarms-container');
+            
+            // Clear container
+            alarmsContainer.innerHTML = '';
+            
+            // Add alarms
+            if (alarms.length === 0) {
+                alarmsContainer.innerHTML = '<p id="no-alarms-message" class="text-center text-muted">No recent alarms</p>';
+            } else {
+                alarms.forEach(alarm => {
+                    const alarmCard = document.createElement('div');
+                    alarmCard.className = 'card alarm-card mb-2';
+                    alarmCard.innerHTML = `
+                        <div class="card-body p-2">
+                            <h6 class="card-title mb-1">${alarm.description}</h6>
+                            <p class="card-text mb-1">
+                                <small class="text-muted">
+                                    ${alarm.deviceName} - ${alarm.alarmCode}
+                                    ${alarm.value ? `(${alarm.value})` : ''}
+                                </small>
+                            </p>
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    ${alarm.timestamp.toLocaleTimeString()}
+                                </small>
+                            </p>
+                        </div>
+                    `;
+                    alarmsContainer.appendChild(alarmCard);
+                });
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type) {
+            const notificationContainer = document.getElementById('notification-container');
+            
+            const notification = document.createElement('div');
+            notification.className = `notification alert alert-${type}`;
+            notification.innerHTML = message;
+            
+            notificationContainer.appendChild(notification);
+            
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    notificationContainer.removeChild(notification);
+                }, 500);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
