@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 
 import Sidebar from './Sidebar';
 
-import AlarmNotification from './siteView/alarmNotification';
+import NotificationCenter from './siteView/NotificationCenter';
 
  
 const Layout = ({ children }) => {
@@ -69,7 +69,7 @@ const Layout = ({ children }) => {
             Oxygen Plant Monitor
 </Typography>
 <div style={{ display: 'flex', alignItems: 'center' }}>
-<AlarmNotification />
+<NotificationCenter />
 <IconButton
 
               size="large"

@@ -3,6 +3,7 @@
 // controllers/deviceController.js
 
 const Device = require('../models/Device');
+const { createNotification } = require('../utils/notificationHelper');
  
 // Get all devices (optionally by plantId)
 
@@ -119,6 +120,29 @@ exports.addDevice = async (req, res) => {
     });
  
     await newDevice.save();
+
+    // Get the plant name if available
+    let plantName = '';
+    try {
+      const Plant = require('../models/plant');
+      const plant = await Plant.findById(plantId);
+      if (plant) {
+        plantName = plant.plantName;
+      }
+    } catch (plantErr) {
+      console.error('Error fetching plant name for notification:', plantErr);
+    }
+
+    // Create notification for new device
+    await createNotification({
+      Type: 'device',
+      Title: 'New Device Added',
+      Message: `A new device "${deviceName}" has been added`,
+      DeviceId: newDevice._id.toString(),
+      DeviceName: deviceName,
+      PlantId: plantId,
+      PlantName: plantName
+    });
 
     res.status(201).json(newDevice);
 

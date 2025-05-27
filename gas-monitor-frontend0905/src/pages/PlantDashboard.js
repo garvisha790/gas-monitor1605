@@ -18,9 +18,14 @@ import {
   Button,
   Grid,
   IconButton,
+  Snackbar,
+  Alert
 } from "@mui/material";
 import { Edit, Delete } from "@mui/icons-material";
 import Layout from "../components/Layout";
+import { useNotifications } from "../context/notificationContext";
+import { useAlarms } from "../context/alarmContext";
+import * as plantService from "../services/plantService";
 
 const PlantDashboard = () => {
   const [plants, setPlants] = useState([]);
@@ -30,6 +35,14 @@ const PlantDashboard = () => {
   const [isActive, setIsActive] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [selectedPlant, setSelectedPlant] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Get notification refresh function to update notifications after adding a plant
+  const { refreshData: refreshNotifications } = useNotifications();
+  const { refreshData: refreshAlarms } = useAlarms();
+  
+  // API URL from environment variables
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
     fetchPlants();
@@ -37,25 +50,59 @@ const PlantDashboard = () => {
 
   const fetchPlants = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/api/plants");
-      setPlants(response.data);
+      const plants = await plantService.getPlants();
+      setPlants(plants);
     } catch (err) {
       console.error("Error fetching plants:", err);
+      setSnackbar({ 
+        open: true, 
+        message: 'Failed to fetch plants. Please try again.', 
+        severity: 'error' 
+      });
     }
   };
 
   const addPlant = async () => {
     try {
-      const response = await axios.post("http://localhost:5000/api/plants", {
+      // Validate inputs
+      if (!plantName || !location || !capacity) {
+        setSnackbar({ 
+          open: true, 
+          message: 'Please fill in all required fields', 
+          severity: 'warning' 
+        });
+        return;
+      }
+      
+      const newPlant = await plantService.addPlant({
         plantName,
         location,
         capacity: parseInt(capacity),
         isActive,
       });
-      setPlants([...plants, response.data]);
+      
+      setPlants([...plants, newPlant]);
       clearForm();
+      
+      // Refresh notifications to show the new plant notification
+      if (refreshNotifications) {
+        console.log('Refreshing notifications after adding plant');
+        refreshNotifications();
+      }
+      
+      setSnackbar({ 
+        open: true, 
+        message: `New plant "${plantName}" has been added successfully!`, 
+        severity: 'success' 
+      });
+      
     } catch (err) {
       console.error("Error adding plant:", err);
+      setSnackbar({ 
+        open: true, 
+        message: 'Failed to add plant. Please try again.', 
+        severity: 'error' 
+      });
     }
   };
 
@@ -71,10 +118,20 @@ const PlantDashboard = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this plant?")) {
       try {
-        await axios.delete(`http://localhost:5000/api/plants/${id}`);
+        await plantService.deletePlant(id);
         fetchPlants();
+        setSnackbar({ 
+          open: true, 
+          message: 'Plant deleted successfully', 
+          severity: 'success' 
+        });
       } catch (err) {
         console.error("Error deleting plant:", err);
+        setSnackbar({ 
+          open: true, 
+          message: 'Failed to delete plant. Please try again.', 
+          severity: 'error' 
+        });
       }
     }
   };
@@ -90,24 +147,63 @@ const PlantDashboard = () => {
 
   const updatePlant = async () => {
     try {
-      await axios.put(`http://localhost:5000/api/plants/${selectedPlant._id}`, {
+      // Validate inputs
+      if (!plantName || !location || !capacity) {
+        setSnackbar({ 
+          open: true, 
+          message: 'Please fill in all required fields', 
+          severity: 'warning' 
+        });
+        return;
+      }
+      
+      await plantService.updatePlant(selectedPlant._id, {
         plantName,
         location,
         capacity: parseInt(capacity),
         isActive,
       });
+      
       fetchPlants();
       clearForm();
+      
+      setSnackbar({ 
+        open: true, 
+        message: 'Plant updated successfully', 
+        severity: 'success' 
+      });
     } catch (err) {
       console.error("Error updating plant:", err);
+      setSnackbar({ 
+        open: true, 
+        message: 'Failed to update plant. Please try again.', 
+        severity: 'error' 
+      });
     }
   };
 
+  // Handle closing the snackbar
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+  
   return (
     <>
       <Typography variant="h4" fontWeight="bold" gutterBottom>
         Plant Dashboard
       </Typography>
+      
+      {/* Notification Snackbar */}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
 
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
         <Typography variant="h6" gutterBottom>

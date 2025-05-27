@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 
 import { AlarmProvider } from './context/alarmContext';
+import { NotificationProvider } from './context/notificationContext';
 
 import Layout from './components/Layout';
 
@@ -27,10 +28,11 @@ import PrivateRoute from './components/PrivateRoute';
 function App() {
 
   return (
-<AlarmProvider>
-  <Router>
-    <AuthProvider>
-      <Routes>
+<NotificationProvider>
+  <AlarmProvider>
+    <Router>
+      <AuthProvider>
+        <Routes>
 <Route path="/login" element={<Login />} />
 <Route path="/register" element={<Register />} />
 <Route path="/" element={<PrivateRoute />}>
@@ -61,9 +63,10 @@ function App() {
               } />
 </Route>
 </Routes>
-    </AuthProvider>
-  </Router>
-</AlarmProvider>
+      </AuthProvider>
+    </Router>
+  </AlarmProvider>
+</NotificationProvider>
 
   );
 

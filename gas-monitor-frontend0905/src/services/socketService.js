@@ -16,7 +16,10 @@ class SocketService {
     this.cache = {
       alarmsInitialDataLoaded: false,
       alarmData: [], // Cache for alarm data
+      notificationsInitialDataLoaded: false,
+      notificationData: [], // Cache for notification data
       lastFetchTime: null, // Timestamp of last API fetch
+      lastNotificationFetchTime: null, // Timestamp of last notification API fetch
       currentPlant: null, // Currently selected plant
       currentDevice: null // Currently selected device
     };
@@ -339,18 +342,37 @@ class SocketService {
   
   // Helper to remove all telemetry-related listeners
   removeAllTelemetryListeners() {
-    // Remove all socket listeners for telemetry events
     if (this.socket) {
-      this.socket.off('telemetry');
-      this.socket.off('telemetry_esp32_04');
+      console.log('🧹 Removing all telemetry-related listeners');
       
-      // Clean up any device-specific listeners
-      this.activeListeners.forEach((_, key) => {
-        if (key.startsWith('telemetry-')) {
-          const deviceId = key.split('telemetry-')[1];
-          this.socket.off(`telemetry-${deviceId}`);
-        }
-      });
+      // Remove device-specific telemetry listeners
+      if (this.cache.currentDevice) {
+        this.socket.off(`telemetry_${this.cache.currentDevice}`);
+        this.socket.off(`telemetry-${this.cache.currentDevice}`);
+      }
+      
+      // Remove general telemetry listener
+      this.socket.off('telemetry');
+      
+      // Clear active listener tracking for telemetry
+      if (this.activeListeners.has('telemetry')) {
+        this.activeListeners.delete('telemetry');
+      }
+    }
+  }
+  
+  // Helper to remove all notification-related listeners
+  removeNotificationListeners() {
+    if (this.socket) {
+      console.log('🧹 Removing all notification-related listeners');
+      
+      // Remove notification listener
+      this.socket.off('notification');
+      
+      // Clear active listener tracking for notifications
+      if (this.activeListeners.has('notification')) {
+        this.activeListeners.delete('notification');
+      }
     }
   }
 
@@ -606,6 +628,149 @@ class SocketService {
     this.cache.alarmsInitialDataLoaded = false;
     this.cache.lastFetchTime = null;
     console.log('🧹 Cleared alarm data cache');
+  }
+  
+  // NOTIFICATION METHODS
+  
+  // Cache notification data for persistence
+  cacheNotificationData(data = []) {
+    this.cache.notificationsInitialDataLoaded = true;
+    this.cache.notificationData = data;
+    this.cache.lastNotificationFetchTime = Date.now();
+    console.log(`📦 Cached ${data.length} notifications at ${new Date().toLocaleString()}`);
+    return true;
+  }
+  
+  // Get cached notification data for persistence between navigation
+  getCachedNotificationData() {
+    return {
+      isLoaded: this.cache.notificationsInitialDataLoaded,
+      data: this.cache.notificationData || [],
+      lastFetchTime: this.cache.lastNotificationFetchTime
+    };
+  }
+  
+  // Add a new notification to the cache
+  addNotificationToCache(newNotification) {
+    if (!newNotification) return;
+
+    // Check if this notification already exists to prevent duplicates
+    const notificationId = newNotification.id || newNotification._id || newNotification.NotificationId || '';
+    const existingNotificationIndex = this.cache.notificationData.findIndex(n => 
+      (n._id === notificationId) || (n.NotificationId === notificationId) ||
+      (newNotification.timestamp && n.CreatedTimestamp === newNotification.timestamp)
+    );
+    
+    if (existingNotificationIndex >= 0) {
+      console.log(`Skipping duplicate notification with ID ${notificationId} - already in cache`);
+      return;
+    }
+
+    // Format notification data consistently
+    const formattedNotification = {
+      _id: notificationId || `notification-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      NotificationId: newNotification.id || newNotification.notificationId || newNotification.NotificationId || '',
+      Type: newNotification.type || newNotification.Type || 'general',
+      Message: newNotification.message || newNotification.Message || '',
+      Title: newNotification.title || newNotification.Title || '',
+      CreatedTimestamp: newNotification.timestamp || newNotification.createdTimestamp || newNotification.CreatedTimestamp || new Date().toISOString(),
+      DeviceId: newNotification.deviceId || newNotification.DeviceId || '',
+      DeviceName: newNotification.deviceName || newNotification.DeviceName || '',
+      PlantId: newNotification.plantId || newNotification.PlantId || '',
+      PlantName: newNotification.plantName || newNotification.PlantName || '',
+      IsRead: false
+    };
+    
+    // Add the new notification at the top of the list (maintain descending timestamp order)
+    this.cache.notificationData = [formattedNotification, ...this.cache.notificationData];
+    console.log(`📝 Added new notification to cache: ${formattedNotification.Type}`);
+  }
+  
+  // Mark notification as read
+  markNotificationAsRead(notificationId) {
+    if (!notificationId) return;
+    
+    this.cache.notificationData = this.cache.notificationData.map(notification => 
+      notification._id === notificationId ? { ...notification, IsRead: true } : notification
+    );
+  }
+  
+  // Clear notification cache
+  clearNotificationCache() {
+    this.cache.notificationData = [];
+    this.cache.notificationsInitialDataLoaded = false;
+    this.cache.lastNotificationFetchTime = null;
+    console.log('🧹 Cleared notification data cache');
+  }
+  
+  // Subscribe to notifications
+  subscribeToNotifications(type = null) {
+    if (!this.socket || !this.connected) {
+      console.log('📬 Socket not connected, adding notification subscription to pending list');
+      this.pendingSubscriptions.add('notifications');
+      return;
+    }
+    
+    console.log(`📬 Subscribing to notifications${type ? ` of type: ${type}` : ''}`);
+    
+    // Send subscription request to server
+    this.socket.emit('subscribe-notifications', { type });
+    
+    // Store in pending subscriptions for reconnection handling
+    this.pendingSubscriptions.add('notifications');
+    
+    if (type) {
+      this.pendingSubscriptions.add(`notification-${type}`);
+    }
+  }
+  
+  // Listen for notification data
+  onNotification(callback) {
+    if (!callback || typeof callback !== 'function') {
+      console.error('Invalid callback provided to onNotification');
+      return;
+    }
+    
+    // Track this listener
+    if (!this.listeners.has('notification')) {
+      this.listeners.set('notification', []);
+    }
+    
+    const callbacks = this.listeners.get('notification');
+    callbacks.push(callback);
+    
+    // Set up socket listener if not already active
+    if (!this.activeListeners.has('notification') && this.socket) {
+      console.log('📬 Setting up notification listener on socket');
+      
+      this.socket.on('notification', (data) => {
+        console.log('📬 Received notification:', data);
+        
+        // Cache this notification
+        this.addNotificationToCache(data);
+        
+        // Call all registered callbacks
+        const allCallbacks = this.listeners.get('notification') || [];
+        allCallbacks.forEach(cb => {
+          try {
+            cb(data);
+          } catch (err) {
+            console.error('Error in notification callback:', err);
+          }
+        });
+      });
+      
+      this.activeListeners.set('notification', true);
+    }
+    
+    // If socket not connected, queue the subscription for when we connect
+    if (!this.socket || !this.connected) {
+      console.log('📬 Socket not connected, queuing notification subscription');
+      this.subscribeToNotifications();
+    } else {
+      // Socket is connected, subscribe now
+      this.subscribeToNotifications();
+    }
   }
 }
 

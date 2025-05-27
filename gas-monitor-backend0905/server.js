@@ -106,8 +106,12 @@ try {
     try {
       alarmRoutes = require('./routes/alarmRoutes');
       console.log('✅ Alarm routes loaded successfully');
+      
+      // Load notification routes
+      notificationRoutes = require('./routes/notificationRoutes');
+      console.log('✅ Notification routes loaded successfully');
     } catch (err) {
-      console.warn('⚠️ Could not load alarm routes:', err.message);
+      console.warn('⚠️ Could not load routes:', err.message);
       // Will fall back to the temporary routes defined below
     }
   }
@@ -169,8 +173,8 @@ if (!alarmRoutes) {
       serverSelectionTimeoutMS: 15000  // Maximum wait time for server selection
     });
   } catch (err) {
-    console.error('❌ Error configuring MongoDB client:', err);
-    // Fallback to simple connection
+    // If ObjectID conversion fails, try with AlarmId field
+    console.log(`💥 ObjectId conversion failed, trying with AlarmId: ${req.params.alarmId}`);
     mongoClient = new MongoClient('mongodb://localhost:27017');
   }
   
@@ -475,23 +479,48 @@ app.get('/dashboard', (req, res) => {
 // Redis test routes
 app.use('/api/redis', redisTestRoutes);
 
-// Socket.IO connection handling
+// Set up Socket.IO event handlers
 io.on("connection", (socket) => {
-  console.log(`🔌 New client connected: ${socket.id}`);
+  console.log(`🔌 Client connected: ${socket.id}`);
   
-  // Handle device subscription
-  socket.on("subscribe", (deviceId) => {
-    console.log(`👂 Client ${socket.id} subscribed to device: ${deviceId}`);
+  // Send immediate connection confirmation
+  socket.emit('connected', { status: 'connected', socketId: socket.id });
+  
+  // Set up telemetry subscription
+  socket.on('subscribe', (deviceId) => {
+    console.log(`📱 Client ${socket.id} subscribed to device: ${deviceId}`);
     socket.join(`device:${deviceId}`);
+    // Confirm subscription back to client
+    socket.emit('subscribed', { device: deviceId, status: 'subscribed' });
   });
   
-  // Handle plant subscription
-  socket.on("subscribePlant", (plantId) => {
-    console.log(`👂 Client ${socket.id} subscribed to plant: ${plantId}`);
+  // Set up plant subscription
+  socket.on('subscribe-plant', (plantId) => {
+    console.log(`🏭 Client ${socket.id} subscribed to plant: ${plantId}`);
     socket.join(`plant:${plantId}`);
+    // Confirm subscription back to client
+    socket.emit('subscribed-plant', { plant: plantId, status: 'subscribed' });
   });
   
-  // Handle client disconnection
+  // Set up notification subscription
+  socket.on('subscribe-notifications', (data) => {
+    console.log(`📬 Client ${socket.id} subscribed to notifications`);
+    socket.join('notifications');
+    
+    // If specific notification type provided, join that room too
+    if (data && data.type) {
+      console.log(`📬 Client ${socket.id} subscribed to ${data.type} notifications`);
+      socket.join(`notification-${data.type}`);
+    }
+    
+    // Confirm subscription back to client
+    socket.emit('subscribed-notifications', { 
+      status: 'subscribed', 
+      type: data && data.type ? data.type : 'all' 
+    });
+  });
+  
+  // Disconnect handling
   socket.on("disconnect", () => {
     console.log(`🔌 Client disconnected: ${socket.id}`);
   });
@@ -678,6 +707,7 @@ const initializeRoutes = () => {
   telemetryRoutes = require("./routes/telemetryRoutes");
   azureDeviceRoutes = require("./routes/azureDevice");
   alarmRoutes = require("./routes/alarmRoutes");
+  notificationRoutes = require("./routes/notificationRoutes");
   
   // Set up routes
   app.use("/api/auth", authRoutes);
@@ -686,6 +716,7 @@ const initializeRoutes = () => {
   app.use("/api/telemetry", telemetryRoutes);
   app.use("/api/azure", azureDeviceRoutes);
   app.use("/api/alarms", alarmRoutes);
+  app.use("/api/notifications", notificationRoutes);
 };
 
 // Connect to multiple MongoDB databases (test and oxygen_monitor)

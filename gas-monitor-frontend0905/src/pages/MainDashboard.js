@@ -25,7 +25,8 @@ import WarningIcon from "@mui/icons-material/Warning";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import AlarmNotification from "../components/siteView/alarmNotification";
+import NotificationCenter from "../components/siteView/NotificationCenter";
+import NotificationDebug from "../components/NotificationDebug";
 
 const drawerWidth = 200;
 
@@ -124,7 +125,7 @@ const MainDashboard = () => {
             Oxygen Plant Monitor
           </Typography>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <AlarmNotification />
+            <NotificationCenter />
             <IconButton
               size="large"
               onClick={handleMenu}
@@ -198,15 +199,15 @@ const MainDashboard = () => {
             <Paper
               elevation={3}
               sx={{
-                height: "200px",
                 padding: "16px",
                 backgroundColor: "#e3f2fd",
                 borderRadius: "16px",
               }}
             >
-              <Typography variant="h6" fontWeight="bold">
-                List of Logs (Auto Refresh)
+              <Typography variant="h6" fontWeight="bold" gutterBottom>
+                Notification Debug Panel
               </Typography>
+              <NotificationDebug />
             </Paper>
           </Grid>
 

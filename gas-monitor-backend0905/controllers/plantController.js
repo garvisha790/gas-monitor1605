@@ -1,4 +1,5 @@
 const Plant = require('../models/plant');
+const { createNotification } = require('../utils/notificationHelper');
 
 exports.getPlants = async (req, res) => {
   try {
@@ -20,6 +21,16 @@ exports.addPlant = async (req, res) => {
 
     const newPlant = new Plant({ plantName, location, capacity, isActive });
     await newPlant.save();
+    
+    // Create notification for new plant
+    await createNotification({
+      Type: 'plant',
+      Title: 'New Plant Added',
+      Message: `A new plant "${plantName}" has been added`,
+      PlantId: newPlant._id.toString(),
+      PlantName: plantName
+    });
+    
     res.status(201).json(newPlant);
   } catch (err) {
     res.status(500).json({ message: err.message });

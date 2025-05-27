@@ -10,6 +10,7 @@ export const AlarmProvider = ({ children }) => {
   const [alarms, setAlarms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(Date.now());
 
   const fetchAlarms = async () => {
     try {
@@ -48,13 +49,17 @@ export const AlarmProvider = ({ children }) => {
     fetchAlarms();
     fetchUnreadCount();
 
-    // const pollingInterval = setInterval(() => {
-    //   console.log('AlarmProvider: Polling for new data');
-    //   fetchAlarms();
-    //   fetchUnreadCount();
-    // }, 30000);
+    // Set up polling to ensure alarms are updated regularly
+    const pollingInterval = setInterval(() => {
+      console.log('AlarmProvider: Polling for new data');
+      fetchAlarms();
+      fetchUnreadCount();
+      setLastUpdated(Date.now());
+    }, 10000); // Poll every 10 seconds
 
-    return () => {};
+    return () => {
+      clearInterval(pollingInterval);
+    };
   }, []);
 
   const refreshData = () => {
